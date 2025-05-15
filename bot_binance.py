@@ -17,9 +17,9 @@ api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 
 # --- CONFIGURACIÓN DEL CLIENTE BINANCE TESTNET --- #
-client = Client(api_key, secret_key)
-client.API_URL = "https://testnet.binance.vision"  # ✅ Testnet explícito
-
+#client = Client(api_key, secret_key)
+#client.API_URL = "https://testnet.binance.vision"  # ✅ Testnet explícito
+client = Client(api_key, secret_key, testnet=True)
 # --- PARÁMETROS CONFIGURABLES --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
