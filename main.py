@@ -112,6 +112,16 @@ def run_bot():
 if __name__ == '__main__':
     # Iniciar el bot en segundo plano
     threading.Thread(target=run_bot, daemon=True).start()
+if __name__ == '__main__':
+    # Iniciar el bot en segundo plano
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    # Enviar mensaje de prueba al iniciar
+    enviar_mensaje_telegram("✅ Bot iniciado correctamente.")
+
+    # Ejecutar servidor Flask
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
 
     # Ejecutar servidor Flask
     port = int(os.environ.get("PORT", 8080))
