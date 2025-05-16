@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from datetime import datetime
 import pandas as pd
 from binance.client import Client
@@ -8,18 +9,16 @@ from dotenv import load_dotenv
 from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
 from flask import Flask, jsonify
-import threading
 
-# --- CARGA DE VARIABLES DE ENTORNO --- #
+# Carga de variables de entorno
 load_dotenv()
-
 api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 
-# --- CONFIGURACIÓN DEL CLIENTE BINANCE TESTNET --- #
+# Cliente Binance
 client = Client(api_key, secret_key, testnet=True)
 
-# --- PARÁMETROS CONFIGURABLES --- #
+# Parámetros del bot
 PARAMS = {
     'symbol': 'BTCUSDT',
     'timeframe': KLINE_INTERVAL_15MINUTE,
@@ -30,10 +29,10 @@ PARAMS = {
     'take_profit': 1.5,
     'stop_loss': 0.75,
     'quantity': 0.001,
-    'sleep_time': 60  # segundos
+    'sleep_time': 60
 }
 
-# --- APP FLASK PARA MONITOREO --- #
+# App Flask
 app = Flask(__name__)
 
 @app.route('/')
@@ -44,15 +43,12 @@ def health_check():
         "service": "binance-bot"
     }), 200
 
-# Evita errores 404 por favicon.ico
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
 
-# --- FUNCIONES PRINCIPALES --- #
 def get_current_time():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
 
 def calcular_indicadores():
     klines = client.get_historical_klines(
@@ -60,13 +56,11 @@ def calcular_indicadores():
         interval=PARAMS['timeframe'],
         start_str="24 hours ago UTC"
     )
-
     df = pd.DataFrame(klines, columns=[
         'timestamp', 'open', 'high', 'low', 'close', 'volume',
         'close_time', 'quote_asset_volume', 'number_of_trades',
         'taker_buy_base', 'taker_buy_quote', 'ignore'
     ])
-
     df['close'] = pd.to_numeric(df['close'])
     df['high'] = pd.to_numeric(df['high'])
 
@@ -76,11 +70,9 @@ def calcular_indicadores():
 
     return df.iloc[-1]
 
-
 def ejecutar_estrategia():
     try:
         print(f"[{get_current_time()}] 📈 Ejecutando estrategia...", flush=True)
-
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
         indicadores = calcular_indicadores()
 
@@ -119,23 +111,14 @@ def ejecutar_estrategia():
     except Exception as e:
         print(f"[{get_current_time()}] ❌ Error: {str(e)}", flush=True)
 
-
 def run_bot():
     print(f"[{get_current_time()}] 🚀 Iniciando bot con timeframe: {PARAMS['timeframe']}", flush=True)
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
 
-
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-
-# --- EJECUCIÓN PRINCIPAL --- #
-if __name__ == "__main__":
+# Llamado desde start.py
+def iniciar_bot():
     bot_thread = threading.Thread(target=run_bot)
     bot_thread.daemon = True
     bot_thread.start()
-
-    run_flask()
