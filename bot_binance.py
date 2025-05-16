@@ -44,11 +44,10 @@ def health_check():
         "service": "binance-bot"
     }), 200
 
-# Opcional: evita error 404 favicon.ico en Railway logs
+# Evita errores 404 por favicon.ico
 @app.route('/favicon.ico')
 def favicon():
     return '', 204
-
 
 # --- FUNCIONES PRINCIPALES --- #
 def get_current_time():
@@ -80,6 +79,8 @@ def calcular_indicadores():
 
 def ejecutar_estrategia():
     try:
+        print(f"[{get_current_time()}] 📈 Ejecutando estrategia...", flush=True)
+
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
         indicadores = calcular_indicadores()
 
@@ -88,7 +89,7 @@ def ejecutar_estrategia():
         price_cond = precio_actual > indicadores['high']
 
         if ema_cond and rsi_cond and price_cond:
-            print(f"[{get_current_time()}] 🟢 COMPRA | Precio: {precio_actual:.2f} | RSI: {indicadores['rsi']:.2f}")
+            print(f"[{get_current_time()}] 🟢 COMPRA | Precio: {precio_actual:.2f} | RSI: {indicadores['rsi']:.2f}", flush=True)
 
             order = client.create_order(
                 symbol=PARAMS['symbol'],
@@ -96,7 +97,7 @@ def ejecutar_estrategia():
                 type=Client.ORDER_TYPE_MARKET,
                 quantity=PARAMS['quantity']
             )
-            print(f"[{get_current_time()}] ✅ Orden ejecutada: ID {order['orderId']}")
+            print(f"[{get_current_time()}] ✅ Orden ejecutada: ID {order['orderId']}", flush=True)
 
             take_profit = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
             stop_loss = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
@@ -109,18 +110,18 @@ def ejecutar_estrategia():
                 stopLimitPrice=stop_loss,
                 price=take_profit
             )
-            print(f"[{get_current_time()}] 🔷 OCO Configurado | TP: {take_profit} | SL: {stop_loss}")
+            print(f"[{get_current_time()}] 🔷 OCO Configurado | TP: {take_profit} | SL: {stop_loss}", flush=True)
         else:
             print(f"[{get_current_time()}] 🔴 Sin señal | EMA9: {indicadores['ema9']:.2f} > EMA21: {indicadores['ema21']:.2f} = {ema_cond} | "
                   f"RSI: {indicadores['rsi']:.2f} < {PARAMS['rsi_umbral']} = {rsi_cond} | "
-                  f"Precio actual: {precio_actual:.2f} > High: {indicadores['high']:.2f} = {price_cond}")
+                  f"Precio actual: {precio_actual:.2f} > High: {indicadores['high']:.2f} = {price_cond}", flush=True)
 
     except Exception as e:
-        print(f"[{get_current_time()}] ❌ Error: {str(e)}")
+        print(f"[{get_current_time()}] ❌ Error: {str(e)}", flush=True)
 
 
 def run_bot():
-    print(f"[{get_current_time()}] 🚀 Iniciando bot con timeframe: {PARAMS['timeframe']}")
+    print(f"[{get_current_time()}] 🚀 Iniciando bot con timeframe: {PARAMS['timeframe']}", flush=True)
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
