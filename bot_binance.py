@@ -17,9 +17,8 @@ api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
 
 # --- CONFIGURACIÓN DEL CLIENTE BINANCE TESTNET --- #
-#client = Client(api_key, secret_key)
-#client.API_URL = "https://testnet.binance.vision"  # ✅ Testnet explícito
 client = Client(api_key, secret_key, testnet=True)
+
 # --- PARÁMETROS CONFIGURABLES --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
@@ -44,6 +43,11 @@ def health_check():
         "last_check": get_current_time(),
         "service": "binance-bot"
     }), 200
+
+# Opcional: evita error 404 favicon.ico en Railway logs
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 
 # --- FUNCIONES PRINCIPALES --- #
@@ -79,10 +83,11 @@ def ejecutar_estrategia():
         precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
         indicadores = calcular_indicadores()
 
-        if (indicadores['ema9'] > indicadores['ema21']) and \
-                (indicadores['rsi'] < PARAMS['rsi_umbral']) and \
-                (precio_actual > indicadores['high']):
+        ema_cond = indicadores['ema9'] > indicadores['ema21']
+        rsi_cond = indicadores['rsi'] < PARAMS['rsi_umbral']
+        price_cond = precio_actual > indicadores['high']
 
+        if ema_cond and rsi_cond and price_cond:
             print(f"[{get_current_time()}] 🟢 COMPRA | Precio: {precio_actual:.2f} | RSI: {indicadores['rsi']:.2f}")
 
             order = client.create_order(
@@ -105,9 +110,10 @@ def ejecutar_estrategia():
                 price=take_profit
             )
             print(f"[{get_current_time()}] 🔷 OCO Configurado | TP: {take_profit} | SL: {stop_loss}")
-
         else:
-            print(f"[{get_current_time()}] 🔴 Sin señal | EMA9: {indicadores['ema9']:.2f} | EMA21: {indicadores['ema21']:.2f} | RSI: {indicadores['rsi']:.2f}")
+            print(f"[{get_current_time()}] 🔴 Sin señal | EMA9: {indicadores['ema9']:.2f} > EMA21: {indicadores['ema21']:.2f} = {ema_cond} | "
+                  f"RSI: {indicadores['rsi']:.2f} < {PARAMS['rsi_umbral']} = {rsi_cond} | "
+                  f"Precio actual: {precio_actual:.2f} > High: {indicadores['high']:.2f} = {price_cond}")
 
     except Exception as e:
         print(f"[{get_current_time()}] ❌ Error: {str(e)}")
