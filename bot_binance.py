@@ -10,15 +10,13 @@ from ta.momentum import RSIIndicator
 from ta.trend import EMAIndicator
 from flask import Flask, jsonify
 
-# Carga de variables de entorno
+# --- Cargar API keys --- #
 load_dotenv()
 api_key = os.getenv("API_KEY")
 secret_key = os.getenv("SECRET_KEY")
-
-# Cliente Binance
 client = Client(api_key, secret_key, testnet=True)
 
-# Parámetros del bot
+# --- Parámetros del bot --- #
 PARAMS = {
     'symbol': 'BTCUSDT',
     'timeframe': KLINE_INTERVAL_15MINUTE,
@@ -32,23 +30,15 @@ PARAMS = {
     'sleep_time': 60
 }
 
-# App Flask
+# --- Flask app --- #
 app = Flask(__name__)
 
 @app.route('/')
-def health_check():
+def status():
     return jsonify({
-        "status": "running",
-        "last_check": get_current_time(),
-        "service": "binance-bot"
+        'status': 'Bot activo',
+        'hora': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }), 200
-
-@app.route('/favicon.ico')
-def favicon():
-    return '', 204
-
-def get_current_time():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def calcular_indicadores():
     klines = client.get_historical_klines(
@@ -72,16 +62,18 @@ def calcular_indicadores():
 
 def ejecutar_estrategia():
     try:
-        print(f"[{get_current_time()}] 📈 Ejecutando estrategia...", flush=True)
-        precio_actual = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
-        indicadores = calcular_indicadores()
+        ahora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{ahora}] Ejecutando estrategia...", flush=True)
 
-        ema_cond = indicadores['ema9'] > indicadores['ema21']
-        rsi_cond = indicadores['rsi'] < PARAMS['rsi_umbral']
-        price_cond = precio_actual > indicadores['high']
+        precio = float(client.get_symbol_ticker(symbol=PARAMS['symbol'])['price'])
+        ind = calcular_indicadores()
 
-        if ema_cond and rsi_cond and price_cond:
-            print(f"[{get_current_time()}] 🟢 COMPRA | Precio: {precio_actual:.2f} | RSI: {indicadores['rsi']:.2f}", flush=True)
+        ema_ok = ind['ema9'] > ind['ema21']
+        rsi_ok = ind['rsi'] < PARAMS['rsi_umbral']
+        precio_ok = precio > ind['high']
+
+        if ema_ok and rsi_ok and precio_ok:
+            print(f"[{ahora}] 🟢 COMPRA | Precio: {precio:.2f} | RSI: {ind['rsi']:.2f}", flush=True)
 
             order = client.create_order(
                 symbol=PARAMS['symbol'],
@@ -89,36 +81,38 @@ def ejecutar_estrategia():
                 type=Client.ORDER_TYPE_MARKET,
                 quantity=PARAMS['quantity']
             )
-            print(f"[{get_current_time()}] ✅ Orden ejecutada: ID {order['orderId']}", flush=True)
+            print(f"[{ahora}] ✅ Orden ejecutada ID: {order['orderId']}", flush=True)
 
-            take_profit = round(precio_actual * (1 + PARAMS['take_profit'] / 100), 2)
-            stop_loss = round(precio_actual * (1 - PARAMS['stop_loss'] / 100), 2)
+            tp = round(precio * (1 + PARAMS['take_profit'] / 100), 2)
+            sl = round(precio * (1 - PARAMS['stop_loss'] / 100), 2)
 
-            oco_order = client.create_oco_order(
+            client.create_oco_order(
                 symbol=PARAMS['symbol'],
                 side=Client.SIDE_SELL,
                 quantity=PARAMS['quantity'],
-                stopPrice=stop_loss,
-                stopLimitPrice=stop_loss,
-                price=take_profit
+                stopPrice=sl,
+                stopLimitPrice=sl,
+                price=tp
             )
-            print(f"[{get_current_time()}] 🔷 OCO Configurado | TP: {take_profit} | SL: {stop_loss}", flush=True)
+            print(f"[{ahora}] 🔷 OCO configurado | TP: {tp} | SL: {sl}", flush=True)
         else:
-            print(f"[{get_current_time()}] 🔴 Sin señal | EMA9: {indicadores['ema9']:.2f} > EMA21: {indicadores['ema21']:.2f} = {ema_cond} | "
-                  f"RSI: {indicadores['rsi']:.2f} < {PARAMS['rsi_umbral']} = {rsi_cond} | "
-                  f"Precio actual: {precio_actual:.2f} > High: {indicadores['high']:.2f} = {price_cond}", flush=True)
+            print(f"[{ahora}] 🔴 Sin señal | EMA9: {ind['ema9']:.2f} > EMA21: {ind['ema21']:.2f}={ema_ok} | "
+                  f"RSI: {ind['rsi']:.2f}<{PARAMS['rsi_umbral']}={rsi_ok} | "
+                  f"Precio: {precio:.2f}>{ind['high']:.2f}={precio_ok}", flush=True)
 
     except Exception as e:
-        print(f"[{get_current_time()}] ❌ Error: {str(e)}", flush=True)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Error: {e}", flush=True)
 
 def run_bot():
-    print(f"[{get_current_time()}] 🚀 Iniciando bot con timeframe: {PARAMS['timeframe']}", flush=True)
     while True:
         ejecutar_estrategia()
         time.sleep(PARAMS['sleep_time'])
 
-# Llamado desde start.py
-def iniciar_bot():
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+# --- Lanzar Flask + Bot --- #
+if __name__ == '__main__':
+    # Iniciar el bot en segundo plano
+    threading.Thread(target=run_bot, daemon=True).start()
+
+    # Ejecutar servidor Flask
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
